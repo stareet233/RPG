@@ -1,5 +1,5 @@
 -- ============================================
--- Buhlal RPG Aimbot
+-- Buhlal RPG Aimbot v15.2 (Cleaned Version)
 -- ============================================
 
 local Players          = game:GetService("Players")
@@ -8,7 +8,6 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage= game:GetService("ReplicatedStorage")
 local StarterPack      = game:GetService("StarterPack")
 local Workspace        = game:GetService("Workspace")
-local HttpService      = game:GetService("HttpService")
 local Camera           = Workspace.CurrentCamera
 local LP               = Players.LocalPlayer
 
@@ -16,16 +15,18 @@ local LP               = Players.LocalPlayer
 -- CONFIG
 -- ============================================
 local CFG = {
-    AutoSave        = true,
     AimEnabled      = false,
     ESPEnabled      = true,
     ESPInvEnabled   = true,
     AimKey          = Enum.UserInputType.MouseButton2,
+    AutoFire        = false,
     GroundAim       = true,
+    GravityComp     = true,
     FOV             = 180,
     Smoothness      = 0.14,
     PredictStr      = 1.1,
     ProjSpeed       = 160,
+    FireCooldown    = 1.8,
     LockDist        = 35,
     MaxDist         = 200,
     InvMaxDist      = 2000,
@@ -41,35 +42,6 @@ local CFG = {
     ShowConf        = true,
     HistoryLen      = 12,
 }
-
-local function SaveConfig()
-    if not CFG.AutoSave then return end
-    pcall(function()
-        if writefile then
-            local toSave = {}
-            for k,v in pairs(CFG) do 
-                if typeof(v) ~= "EnumItem" then 
-                    toSave[k] = v 
-                end 
-            end
-            writefile("BuhlalRPG_Config.json", HttpService:JSONEncode(toSave))
-        end
-    end)
-end
-
-local function LoadConfig()
-    pcall(function()
-        if readfile and isfile and isfile("BuhlalRPG_Config.json") then
-            local d = HttpService:JSONDecode(readfile("BuhlalRPG_Config.json"))
-            for k,v in pairs(d) do 
-                if CFG[k] ~= nil and typeof(CFG[k]) == typeof(v) then 
-                    CFG[k] = v 
-                end 
-            end
-        end
-    end)
-end
-LoadConfig()
 
 local holding = false
 
@@ -153,6 +125,9 @@ local function predictTarget(player, hrp)
         finalPos = Vector3.new(pred.X, gy, pred.Z)
     else
         finalPos = pred
+        if CFG.GravityComp then
+            finalPos = finalPos + Vector3.new(0, 0.5 * Workspace.Gravity * T * T * 0.4, 0)
+        end
     end
     local movDir = avgVel.Magnitude > 0.5 and avgVel.Unit or nil
     local conf = 1
@@ -270,12 +245,50 @@ local function getBest()
 end
 
 -- ============================================
--- AIM
+-- AIM + FIRE
 -- ============================================
 local function aimAt(pos)
     if not pos then return end
     local cur = Camera.CFrame
     Camera.CFrame = cur:Lerp(CFrame.new(cur.Position, pos), CFG.Smoothness)
+end
+
+local function fireAnyTool(tool)
+    pcall(function() tool:Activate() end)
+    for _, d in ipairs(tool:GetDescendants()) do
+        if d:IsA("RemoteEvent") then
+            local n = d.Name:lower()
+            if n:find("fire") or n:find("shoot") or n:find("attack") then
+                pcall(function() d:FireServer(Camera.CFrame, Camera.CFrame.LookVector) end)
+            end
+        end
+    end
+end
+
+local lastFire, firing = 0, false
+local function doFire(sd)
+    if firing or not CFG.AutoFire then return end
+    if sd > CFG.LockDist then return end
+    if os.clock() - lastFire < CFG.FireCooldown then return end
+    firing = true lastFire = os.clock()
+    
+    task.spawn(function()
+        local ch = LP.Character
+        if ch then
+            local tool = ch:FindFirstChildOfClass("Tool")
+            if tool then fireAnyTool(tool) end
+        end
+
+        pcall(function()
+            local vim = game:GetService("VirtualInputManager")
+            local cx, cy = Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2
+            vim:SendMouseButtonEvent(cx, cy, 0, true, game, 0)
+            task.wait(0.06)
+            vim:SendMouseButtonEvent(cx, cy, 0, false, game, 0)
+        end)
+        task.wait(0.1)
+        firing = false
+    end)
 end
 
 -- ============================================
@@ -513,7 +526,7 @@ RunService.RenderStepped:Connect(function()
     if CFG.AimEnabled and holding and bAim then
         if not currentAimPoint then currentAimPoint=bAim
         else currentAimPoint=currentAimPoint:Lerp(bAim,0.05) end
-        aimAt(currentAimPoint)
+        aimAt(currentAimPoint) doFire(aimSD)
     else currentAimPoint=nil end
     if statusLbl then
         if not CFG.AimEnabled and not CFG.ESPEnabled then
@@ -603,7 +616,7 @@ local C={
 }
 
 local sg=Instance.new("ScreenGui")
-sg.Name="BuhlaAim" sg.ResetOnSpawn=false
+sg.Name="BuhlaAimV15" sg.ResetOnSpawn=false
 pcall(function() sg.Parent=game:GetService("CoreGui") end)
 if sg.Parent~=game:GetService("CoreGui") then sg.Parent=LP:WaitForChild("PlayerGui") end
 
@@ -624,7 +637,7 @@ tbFix.Position=UDim2.new(0,0,0.5,0) tbFix.BackgroundColor3=C.side tbFix.BorderSi
 
 local tlTitle=Instance.new("TextLabel")
 tlTitle.Size=UDim2.new(1,-50,1,0) tlTitle.Position=UDim2.new(0,14,0,0)
-tlTitle.BackgroundTransparency=1 tlTitle.Text="🎯  Buhlal RPG"
+tlTitle.BackgroundTransparency=1 tlTitle.Text="🎯  Buhlal RPG  ·  v15.2 (Cleaned)"
 tlTitle.TextColor3=C.txt tlTitle.TextSize=15 tlTitle.Font=Enum.Font.GothamBold
 tlTitle.TextXAlignment=Enum.TextXAlignment.Left tlTitle.Parent=tb
 
@@ -784,40 +797,38 @@ local pCombat=newTab("Combat","🔫")
 local pAI=newTab("AI","🧠")
 local pTarget=newTab("Target","🎯")
 local pVisual=newTab("Visuals","👁")
-local pConfig=newTab("Config","⚙")
 
 -- Combat Page
-togRow(pCombat,"Enable Aimbot",CFG.AimEnabled,function(v) CFG.AimEnabled=v SaveConfig() end)
-togRow(pCombat,"Ground Aim (RPG)",CFG.GroundAim,function(v) CFG.GroundAim=v SaveConfig() end)
-sldRow(pCombat,"Projectile Speed",10,500,CFG.ProjSpeed,"%.0f",function(v) CFG.ProjSpeed=v SaveConfig() end)
-sldRow(pCombat,"Lock Distance (px)",5,100,CFG.LockDist,"%.0f",function(v) CFG.LockDist=v SaveConfig() end)
+togRow(pCombat,"Enable Aimbot",CFG.AimEnabled,function(v) CFG.AimEnabled=v end)
+togRow(pCombat,"Auto Fire",CFG.AutoFire,function(v) CFG.AutoFire=v end)
+togRow(pCombat,"Ground Aim (RPG)",CFG.GroundAim,function(v) CFG.GroundAim=v end)
+togRow(pCombat,"Gravity Comp",CFG.GravityComp,function(v) CFG.GravityComp=v end)
+sldRow(pCombat,"Projectile Speed",10,500,CFG.ProjSpeed,"%.0f",function(v) CFG.ProjSpeed=v end)
+sldRow(pCombat,"Fire Cooldown (s)",0.3,6,CFG.FireCooldown,"%.1f",function(v) CFG.FireCooldown=v end)
+sldRow(pCombat,"Fire Accuracy (px)",5,100,CFG.LockDist,"%.0f",function(v) CFG.LockDist=v end)
 
 -- AI Page
-sldRow(pAI,"Prediction Strength",0,3,CFG.PredictStr,"%.2f",function(v) CFG.PredictStr=v SaveConfig() end)
-sldRow(pAI,"Camera Smoothness",0.01,1,CFG.Smoothness,"%.2f",function(v) CFG.Smoothness=v SaveConfig() end)
+sldRow(pAI,"Prediction Strength",0,3,CFG.PredictStr,"%.2f",function(v) CFG.PredictStr=v end)
+sldRow(pAI,"Camera Smoothness",0.01,1,CFG.Smoothness,"%.2f",function(v) CFG.Smoothness=v end)
 
 -- Target Page
-togRow(pTarget,"Wall Check",CFG.WallCheck,function(v) CFG.WallCheck=v SaveConfig() end)
-togRow(pTarget,"Team Check",CFG.TeamCheck,function(v) CFG.TeamCheck=v SaveConfig() end)
-togRow(pTarget,"Sticky Lock",CFG.StickyLock,function(v) CFG.StickyLock=v if not v then lockedTarget=nil end SaveConfig() end)
-sldRow(pTarget,"FOV Radius",20,500,CFG.FOV,"%.0f",function(v) CFG.FOV=v SaveConfig() end)
-sldRow(pTarget,"Max Distance (m)",10,800,CFG.MaxDist,"%.0f",function(v) CFG.MaxDist=v SaveConfig() end)
+togRow(pTarget,"Wall Check",CFG.WallCheck,function(v) CFG.WallCheck=v end)
+togRow(pTarget,"Team Check",CFG.TeamCheck,function(v) CFG.TeamCheck=v end)
+togRow(pTarget,"Sticky Lock",CFG.StickyLock,function(v) CFG.StickyLock=v if not v then lockedTarget=nil end end)
+sldRow(pTarget,"FOV Radius",20,500,CFG.FOV,"%.0f",function(v) CFG.FOV=v end)
+sldRow(pTarget,"Max Distance (m)",10,800,CFG.MaxDist,"%.0f",function(v) CFG.MaxDist=v end)
 
 -- Visuals Page
-togRow(pVisual,"Enable ESP",CFG.ESPEnabled,function(v) CFG.ESPEnabled=v SaveConfig() end)
+togRow(pVisual,"Enable ESP",CFG.ESPEnabled,function(v) CFG.ESPEnabled=v end)
 togRow(pVisual,"Inventory ESP",CFG.ESPInvEnabled,function(v)
     CFG.ESPInvEnabled=v
     for _,p in ipairs(Players:GetPlayers()) do if p~=LP then task.spawn(updateInventoryESP,p) end end
-    SaveConfig()
 end)
-togRow(pVisual,"Show FOV Circle",CFG.ShowFOV,function(v) CFG.ShowFOV=v SaveConfig() end)
-togRow(pVisual,"Ground Hit Ring",CFG.ShowGndCircle,function(v) CFG.ShowGndCircle=v SaveConfig() end)
-togRow(pVisual,"Movement Trail",CFG.ShowTrail,function(v) CFG.ShowTrail=v SaveConfig() end)
-togRow(pVisual,"Direction Arrow",CFG.ShowArrow,function(v) CFG.ShowArrow=v SaveConfig() end)
-togRow(pVisual,"Confidence Bar",CFG.ShowConf,function(v) CFG.ShowConf=v SaveConfig() end)
-
--- Config Page
-togRow(pConfig,"Auto Save Config",CFG.AutoSave,function(v) CFG.AutoSave=v SaveConfig() end)
+togRow(pVisual,"Show FOV Circle",CFG.ShowFOV,function(v) CFG.ShowFOV=v end)
+togRow(pVisual,"Ground Hit Ring",CFG.ShowGndCircle,function(v) CFG.ShowGndCircle=v end)
+togRow(pVisual,"Movement Trail",CFG.ShowTrail,function(v) CFG.ShowTrail=v end)
+togRow(pVisual,"Direction Arrow",CFG.ShowArrow,function(v) CFG.ShowArrow=v end)
+togRow(pVisual,"Confidence Bar",CFG.ShowConf,function(v) CFG.ShowConf=v end)
 
 -- BOOTSTRAP TABS
 allTabs[1].BackgroundColor3=C.panel
