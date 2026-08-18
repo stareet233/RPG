@@ -25,7 +25,8 @@ local CFG = {
     FOV             = 180,
     Smoothness      = 0.14,
     PredictStr      = 1.1,
-    ProjSpeed       = 160,
+    ProjSpeedMin    = 130,   -- تم إضافة الحد الأدنى
+    ProjSpeedMax    = 190,   -- تم إضافة الحد الأقصى
     FireCooldown    = 1.8,
     LockDist        = 35,
     MaxDist         = 200,
@@ -117,7 +118,11 @@ local function predictTarget(player, hrp)
     if not d then return hrp.Position, nil, 0 end
     local avgVel = d.smoothVel or Vector3.zero
     local dist   = (hrp.Position - Camera.CFrame.Position).Magnitude
-    local T      = dist / math.max(CFG.ProjSpeed, 1)
+    
+    -- حساب السرعة بناءً على المتوسط
+    local avgSpeed = (CFG.ProjSpeedMin + CFG.ProjSpeedMax) / 2
+    local T      = dist / math.max(avgSpeed, 1)
+    
     local pred = hrp.Position + avgVel * T * CFG.PredictStr
     local finalPos
     if CFG.GroundAim then
@@ -803,13 +808,196 @@ togRow(pCombat,"Enable Aimbot",CFG.AimEnabled,function(v) CFG.AimEnabled=v end)
 togRow(pCombat,"Auto Fire",CFG.AutoFire,function(v) CFG.AutoFire=v end)
 togRow(pCombat,"Ground Aim (RPG)",CFG.GroundAim,function(v) CFG.GroundAim=v end)
 togRow(pCombat,"Gravity Comp",CFG.GravityComp,function(v) CFG.GravityComp=v end)
-sldRow(pCombat,"Projectile Speed",10,500,CFG.ProjSpeed,"%.0f",function(v) CFG.ProjSpeed=v end)
 sldRow(pCombat,"Fire Cooldown (s)",0.3,6,CFG.FireCooldown,"%.1f",function(v) CFG.FireCooldown=v end)
 sldRow(pCombat,"Fire Accuracy (px)",5,100,CFG.LockDist,"%.0f",function(v) CFG.LockDist=v end)
 
 -- AI Page
 sldRow(pAI,"Prediction Strength",0,3,CFG.PredictStr,"%.2f",function(v) CFG.PredictStr=v end)
 sldRow(pAI,"Camera Smoothness",0.01,1,CFG.Smoothness,"%.2f",function(v) CFG.Smoothness=v end)
+
+-- بطاقة نطاق سرعة الـ RPG مع زر الرصد
+local speedCard = Instance.new("Frame")
+speedCard.Size = UDim2.new(0.93,0,0,115) -- تم زيادة الارتفاع ليتسع للزر
+speedCard.BackgroundColor3 = Color3.fromRGB(18,24,18)
+speedCard.Parent = pAI
+Instance.new("UICorner",speedCard).CornerRadius = UDim.new(0,8)
+Instance.new("UIStroke",speedCard).Color = Color3.fromRGB(0,140,60)
+
+local speedTitle = Instance.new("TextLabel",speedCard)
+speedTitle.Size = UDim2.new(0.6,0,0,22)
+speedTitle.Position = UDim2.new(0,10,0,4)
+speedTitle.BackgroundTransparency = 1
+speedTitle.Text = "🚀 RPG Speed Range"
+speedTitle.TextColor3 = Color3.fromRGB(80,220,80)
+speedTitle.TextSize = 11
+speedTitle.Font = Enum.Font.GothamBold
+speedTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local speedAvgLbl = Instance.new("TextLabel",speedCard)
+speedAvgLbl.Size = UDim2.new(0.38,0,0,22)
+speedAvgLbl.Position = UDim2.new(0.6,0,0,4)
+speedAvgLbl.BackgroundTransparency = 1
+speedAvgLbl.TextColor3 = Color3.fromRGB(255,200,50)
+speedAvgLbl.TextSize = 11
+speedAvgLbl.Font = Enum.Font.GothamBold
+speedAvgLbl.TextXAlignment = Enum.TextXAlignment.Right
+
+local speedRangeLbl = Instance.new("TextLabel",speedCard)
+speedRangeLbl.Size = UDim2.new(1,-10,0,18)
+speedRangeLbl.Position = UDim2.new(0,10,0,26)
+speedRangeLbl.BackgroundTransparency = 1
+speedRangeLbl.TextColor3 = Color3.fromRGB(130,130,142)
+speedRangeLbl.TextSize = 10
+speedRangeLbl.Font = Enum.Font.GothamMedium
+speedRangeLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+local function updateAvgLabel()
+    local avg = math.floor((CFG.ProjSpeedMin + CFG.ProjSpeedMax) / 2)
+    speedAvgLbl.Text = "avg: " .. avg
+end
+
+local function updateRangeLabel()
+    speedRangeLbl.Text = "Min: "..math.floor(CFG.ProjSpeedMin).."   →   Max: "..math.floor(CFG.ProjSpeedMax)
+end
+updateAvgLabel() updateRangeLabel()
+
+-- سلايدر Min
+local minSliderRow = Instance.new("Frame",speedCard)
+minSliderRow.Size = UDim2.new(0.46,0,0,16)
+minSliderRow.Position = UDim2.new(0.02,0,0,50)
+minSliderRow.BackgroundColor3 = Color3.fromRGB(28,28,38)
+minSliderRow.BorderSizePixel = 0
+Instance.new("UICorner",minSliderRow).CornerRadius = UDim.new(1,0)
+
+local minFill = Instance.new("Frame",minSliderRow)
+minFill.BackgroundColor3 = Color3.fromRGB(0,190,80)
+minFill.BorderSizePixel = 0
+Instance.new("UICorner",minFill).CornerRadius = UDim.new(1,0)
+
+local minThumb = Instance.new("TextButton",minSliderRow)
+minThumb.Size = UDim2.new(0,12,0,12)
+minThumb.AnchorPoint = Vector2.new(0.5,0.5)
+minThumb.BackgroundColor3 = Color3.fromRGB(238,238,244)
+minThumb.Text = "" minThumb.BorderSizePixel = 0
+Instance.new("UICorner",minThumb).CornerRadius = UDim.new(1,0)
+
+local minLbl = Instance.new("TextLabel",speedCard)
+minLbl.Size = UDim2.new(0.2,0,0,14)
+minLbl.Position = UDim2.new(0.0,4,0,36)
+minLbl.BackgroundTransparency = 1
+minLbl.Text = "Min"
+minLbl.TextColor3 = Color3.fromRGB(80,220,80)
+minLbl.TextSize = 9 minLbl.Font = Enum.Font.GothamBold
+minLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+-- سلايدر Max
+local maxSliderRow = Instance.new("Frame",speedCard)
+maxSliderRow.Size = UDim2.new(0.46,0,0,16)
+maxSliderRow.Position = UDim2.new(0.52,0,0,50)
+maxSliderRow.BackgroundColor3 = Color3.fromRGB(28,28,38)
+maxSliderRow.BorderSizePixel = 0
+Instance.new("UICorner",maxSliderRow).CornerRadius = UDim.new(1,0)
+
+local maxFill = Instance.new("Frame",maxSliderRow)
+maxFill.BackgroundColor3 = Color3.fromRGB(255,100,50)
+maxFill.BorderSizePixel = 0
+Instance.new("UICorner",maxFill).CornerRadius = UDim.new(1,0)
+
+local maxThumb = Instance.new("TextButton",maxSliderRow)
+maxThumb.Size = UDim2.new(0,12,0,12)
+maxThumb.AnchorPoint = Vector2.new(0.5,0.5)
+maxThumb.BackgroundColor3 = Color3.fromRGB(238,238,244)
+maxThumb.Text = "" maxThumb.BorderSizePixel = 0
+Instance.new("UICorner",maxThumb).CornerRadius = UDim.new(1,0)
+
+local maxLbl = Instance.new("TextLabel",speedCard)
+maxLbl.Size = UDim2.new(0.2,0,0,14)
+maxLbl.Position = UDim2.new(0.5,4,0,36)
+maxLbl.BackgroundTransparency = 1
+maxLbl.Text = "Max"
+maxLbl.TextColor3 = Color3.fromRGB(255,100,50)
+maxLbl.TextSize = 9 maxLbl.Font = Enum.Font.GothamBold
+maxLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+local function updateSliderVisuals()
+    local r1 = (CFG.ProjSpeedMin - 10) / (500 - 10)
+    minFill.Size = UDim2.new(r1,0,1,0) minThumb.Position = UDim2.new(r1,0,0.5,0)
+    local r2 = (CFG.ProjSpeedMax - 10) / (500 - 10)
+    maxFill.Size = UDim2.new(r2,0,1,0) maxThumb.Position = UDim2.new(r2,0,0.5,0)
+    updateAvgLabel() updateRangeLabel()
+end
+updateSliderVisuals()
+
+local sldMin, sldMax = false, false
+minThumb.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then sldMin=true end end)
+maxThumb.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then sldMax=true end end)
+UserInputService.InputEnded:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 then sldMin=false sldMax=false end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if i.UserInputType~=Enum.UserInputType.MouseMovement then return end
+    if sldMin then
+        local ta=minSliderRow.AbsolutePosition local ts=minSliderRow.AbsoluteSize
+        local r=math.clamp((i.Position.X-ta.X)/ts.X,0,1)
+        local v=math.floor(10+(500-10)*r)
+        CFG.ProjSpeedMin=math.min(v, CFG.ProjSpeedMax)
+        updateSliderVisuals()
+    end
+    if sldMax then
+        local ta=maxSliderRow.AbsolutePosition local ts=maxSliderRow.AbsoluteSize
+        local r=math.clamp((i.Position.X-ta.X)/ts.X,0,1)
+        local v=math.floor(10+(500-10)*r)
+        CFG.ProjSpeedMax=math.max(v, CFG.ProjSpeedMin)
+        updateSliderVisuals()
+    end
+end)
+
+-- زر التعرف التلقائي
+local detectBtn = Instance.new("TextButton", speedCard)
+detectBtn.Size = UDim2.new(0.96, 0, 0, 26)
+detectBtn.Position = UDim2.new(0.02, 0, 0, 80)
+detectBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 210)
+detectBtn.Text = "🔍 Auto-Detect Speed (Shoot Now!)"
+detectBtn.TextColor3 = Color3.fromRGB(255,255,255)
+detectBtn.Font = Enum.Font.GothamBold
+detectBtn.TextSize = 11
+Instance.new("UICorner", detectBtn).CornerRadius = UDim.new(0, 6)
+
+local detecting, detectConn = false, nil
+detectBtn.MouseButton1Click:Connect(function()
+    if detecting then return end
+    detecting = true
+    detectBtn.Text = "⏳ اطلق الـ RPG الان ليتم الحساب..."
+    detectBtn.BackgroundColor3 = Color3.fromRGB(200, 120, 0)
+    
+    if detectConn then detectConn:Disconnect() end
+    detectConn = Workspace.DescendantAdded:Connect(function(descendant)
+        if descendant:IsA("BasePart") and string.find(string.lower(descendant.Name), "rpg") then
+            local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+            if hrp and (descendant.Position - hrp.Position).Magnitude <= 25 then
+                task.wait(0.1)
+                if descendant and descendant.Parent then
+                    local speed = descendant.AssemblyLinearVelocity.Magnitude
+                    if speed > 10 then
+                        detectConn:Disconnect()
+                        detectConn = nil
+                        local s = math.floor(speed)
+                        CFG.ProjSpeedMin = s
+                        CFG.ProjSpeedMax = s
+                        updateSliderVisuals()
+                        
+                        detectBtn.Text = "✅ تم الرصد بنجاح: " .. s
+                        detectBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 80)
+                        task.wait(2.5)
+                        detecting = false
+                        detectBtn.Text = "🔍 Auto-Detect Speed (Shoot Now!)"
+                        detectBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 210)
+                    end
+                end
+            end
+        end
+    end)
+end)
 
 -- Target Page
 togRow(pTarget,"Wall Check",CFG.WallCheck,function(v) CFG.WallCheck=v end)
@@ -845,5 +1033,6 @@ xB.MouseButton1Click:Connect(function()
     for _,t in ipairs(TRAIL) do pcall(function() t:Remove() end) end
     for _,e in pairs(ESP) do for _,o in pairs(e) do pcall(function() o:Remove() end) end end
     for _,bb in pairs(BillboardCache) do pcall(function() bb:Destroy() end) end
+    if detectConn then detectConn:Disconnect() end
     sg:Destroy()
 end)
